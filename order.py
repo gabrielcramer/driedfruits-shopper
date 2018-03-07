@@ -1,19 +1,21 @@
 #!/usr/bin/env python3
+import re
+import os, time, sys
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait # available since 2.4.0
 from selenium.webdriver.support import expected_conditions as EC # available since 2.26.0
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException, TimeoutException
-import os, time, sys
 from collections import OrderedDict
 
 def get_weight(product_weight):
-    product_weight = product_weight.lower()
+    product_weight = product_weight.lower().strip()
+
     if "kg" in product_weight:
-        return 1000 * float(product_weight.strip('kg '))
+        return 1000 * float(re.sub(r'kg.*$', '', product_weight, flags=re.IGNORECASE))
     elif "g" in product_weight:
-        return float(product_weight.strip('g '))
+        return float(re.sub(r'g.*$', '', product_weight, flags=re.IGNORECASE))
     else:
         return 0
 
@@ -38,8 +40,8 @@ def main():
         password_field.send_keys(str(password))
         button = driver.find_element_by_xpath("//input[@value='Autentificare' and @type='submit']")
         button.click()
-        return
     except:
+        print('*** Encountered an error while attempting to log in ***')
         driver.quit()
         return
     try:
@@ -68,18 +70,23 @@ def main():
         price = driver.find_element_by_id('price-old').text
         full_product_name = driver.find_element_by_class_name('product-name').text
         product_name = full_product_name.split('-')[0].strip()
-        product_weight = full_product_name.split('-')[-1].strip()
-        total_weight += get_weight(product_weight) * products[link]
+        product_weight_str = full_product_name.split('-')[-1].strip()
+        try:
+            product_weight = get_weight(product_weight_str) * products[link]
+        except:
+            product_weight = 0
+            print('*** Encountered an error while parsing product weight of {0} ***'.format(full_product_name))
+        total_weight += product_weight
         total_cost += float(price.strip("Ron").replace(",",".")) * products[link]
         if product_types:
-            if product_weight != 0:
+            if product_weight_str != 0:
                 for pt in product_types:
-                    if pt.text == product_weight:
+                    if pt.text == product_weight_str:
                         pt.click()
             else:
                 product_types[0].click()
 
-        print("{0:2d}/{1:2d} Name: {2:<60s} Weight/Volume: {3:>7s} Quantity: {4:<2d} Price: {5:>9s}".format(count, total, product_name, product_weight, products[link], price))
+        print("{0:2d}/{1:2d} Name: {2:<60s} Weight/Volume: {3:>7s} Quantity: {4:<2d} Price: {5:>9s}".format(count, total, product_name, product_weight_str, products[link], price))
 
         if products[link] > 1:
             quantity_field = driver.find_element_by_id('quantity_wanted')
